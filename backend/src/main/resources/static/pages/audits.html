@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduConnect – Audits</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <span class="topbar-title"></span>
+      <div class="topbar-actions">
+        <button class="notif-btn" onclick="location.href='notifications.html'">
+          <i class="fas fa-bell"></i>
+          <span class="notif-badge" id="notif-count" style="display:none">0</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div><h2>Audits</h2><p>Create and track audit activities</p></div>
+        <button class="btn-primary-ec" onclick="openModal('audit-modal')"><i class="fas fa-plus"></i> New Audit</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h5><i class="fas fa-search"></i> All Audits</h5>
+          <div style="display:flex;gap:8px">
+            <select id="status-filter" class="form-select" style="width:auto;font-size:.85rem" onchange="filterAudits()">
+              <option value="">All Statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="ACTIVE">Active</option>
+              <option value="COMPLETED">Completed</option>
+            </select>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="ec-table">
+              <thead><tr><th>#</th><th>Scope</th><th>Officer</th><th>Findings</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="audits-tbody"><tr><td colspan="7"><div class="spinner"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New Audit Modal -->
+<div class="modal-overlay" id="audit-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h5><i class="fas fa-search"></i> Create Audit</h5>
+      <button class="modal-close" onclick="closeModal('audit-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Scope *</label>
+        <input type="text" id="a-scope" class="form-control" placeholder="Full institution review / Course 5 audit…"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Findings</label>
+        <textarea id="a-findings" class="form-control" rows="4" placeholder="Initial findings and observations…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline-ec" onclick="closeModal('audit-modal')">Cancel</button>
+      <button class="btn-primary-ec" id="save-a-btn" onclick="doCreate()"><i class="fas fa-save"></i> Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Update Status Modal -->
+<div class="modal-overlay" id="status-modal">
+  <div class="modal-box" style="max-width:380px">
+    <div class="modal-header">
+      <h5><i class="fas fa-edit"></i> Update Status</h5>
+      <button class="modal-close" onclick="closeModal('status-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="status-audit-id"/>
+      <div class="form-group">
+        <label class="form-label">New Status</label>
+        <select id="new-status" class="form-select">
+          <option value="PENDING">Pending</option>
+          <option value="ACTIVE">Active</option>
+          <option value="COMPLETED">Completed</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline-ec" onclick="closeModal('status-modal')">Cancel</button>
+      <button class="btn-primary-ec" id="upd-status-btn" onclick="doUpdateStatus()"><i class="fas fa-save"></i> Update</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+  buildLayout('Audits', 'audits');
+
+  const user = Auth.getUser();
+  let allAudits = [];
+
+  async function loadAudits() {
+    try {
+      allAudits = await ComplianceAPI.getAudits();
+      renderTable(allAudits);
+    } catch(e) { showToast(e.message,'error'); }
+  }
+
+  function filterAudits() {
+    const status = document.getElementById('status-filter').value;
+    renderTable(status ? allAudits.filter(a=>a.status===status) : allAudits);
+  }
+
+  function renderTable(list) {
+    const tbody = document.getElementById('audits-tbody');
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="fas fa-search"></i><p>No audits found.</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map((a,i) => `<tr>
+      <td style="color:var(--text-muted)">${i+1}</td>
+      <td><strong>${esc(a.scope)}</strong></td>
+      <td>${esc(a.officer?.name||'—')}</td>
+      <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted)"
+          title="${esc(a.findings||'')}">${esc(a.findings||'—')}</td>
+      <td>${fmtDate(a.date)}</td>
+      <td>${badge(a.status)}</td>
+      <td>
+        <button class="btn-outline-ec" style="padding:4px 10px;font-size:.78rem"
+          onclick="openStatusModal(${a.auditId},'${a.status}')">
+          <i class="fas fa-edit"></i> Status
+        </button>
+      </td>
+    </tr>`).join('');
+  }
+
+  async function doCreate() {
+    const btn = document.getElementById('save-a-btn');
+    const scope = document.getElementById('a-scope').value.trim();
+    if (!scope) return showToast('Scope is required','error');
+    setLoading(btn, true, 'Create');
+    try {
+      await ComplianceAPI.createAudit(user.userId, {
+        scope,
+        findings: document.getElementById('a-findings').value.trim(),
+      });
+      showToast('Audit created!','success');
+      closeModal('audit-modal');
+      loadAudits();
+    } catch(e) { showToast(e.message,'error'); }
+    finally { setLoading(btn, false, '<i class="fas fa-save"></i> Create'); }
+  }
+
+  function openStatusModal(auditId, currentStatus) {
+    document.getElementById('status-audit-id').value = auditId;
+    document.getElementById('new-status').value = currentStatus;
+    openModal('status-modal');
+  }
+
+  async function doUpdateStatus() {
+    const btn = document.getElementById('upd-status-btn');
+    setLoading(btn, true, 'Update');
+    try {
+      await ComplianceAPI.updateAuditStatus(
+        document.getElementById('status-audit-id').value,
+        document.getElementById('new-status').value
+      );
+      showToast('Status updated!','success');
+      closeModal('status-modal');
+      loadAudits();
+    } catch(e) { showToast(e.message,'error'); }
+    finally { setLoading(btn, false, '<i class="fas fa-save"></i> Update'); }
+  }
+
+  loadAudits();
+</script>
+</body>
+</html>

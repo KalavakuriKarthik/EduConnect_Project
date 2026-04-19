@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduConnect – Compliance Records</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <span class="topbar-title"></span>
+      <div class="topbar-actions">
+        <button class="notif-btn" onclick="location.href='notifications.html'">
+          <i class="fas fa-bell"></i>
+          <span class="notif-badge" id="notif-count" style="display:none">0</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div><h2>Compliance Records</h2><p>All compliance monitoring records</p></div>
+        <button class="btn-primary-ec" onclick="openModal('record-modal')"><i class="fas fa-plus"></i> New Record</button>
+      </div>
+
+      <!-- Summary bar -->
+      <div class="stats-grid">
+        <div class="stat-card" style="border-left-color:var(--success)">
+          <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+          <div class="stat-info"><div class="stat-value" id="r-compliant">—</div><div class="stat-label">Compliant</div></div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--danger)">
+          <div class="stat-icon red"><i class="fas fa-times-circle"></i></div>
+          <div class="stat-info"><div class="stat-value" id="r-non">—</div><div class="stat-label">Non-Compliant</div></div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--warning)">
+          <div class="stat-icon orange"><i class="fas fa-clock"></i></div>
+          <div class="stat-info"><div class="stat-value" id="r-review">—</div><div class="stat-label">Under Review</div></div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--accent)">
+          <div class="stat-icon teal"><i class="fas fa-percentage"></i></div>
+          <div class="stat-info"><div class="stat-value" id="r-rate">—</div><div class="stat-label">Compliance Rate</div></div>
+        </div>
+      </div>
+
+      <!-- Filter -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-body" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Filter by Result</label>
+            <select id="result-filter" class="form-select" onchange="filterRecords()">
+              <option value="">All Results</option>
+              <option value="COMPLIANT">Compliant</option>
+              <option value="NON_COMPLIANT">Non-Compliant</option>
+              <option value="UNDER_REVIEW">Under Review</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Filter by Type</label>
+            <select id="type-filter" class="form-select" onchange="filterRecords()">
+              <option value="">All Types</option>
+              <option value="Course">Course</option>
+              <option value="Assessment">Assessment</option>
+              <option value="Program">Program</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h5><i class="fas fa-shield-alt"></i> All Records</h5></div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="ec-table">
+              <thead><tr><th>#</th><th>Type</th><th>Entity ID</th><th>Result</th><th>Date</th><th>Notes</th></tr></thead>
+              <tbody id="records-tbody"><tr><td colspan="6"><div class="spinner"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New Record Modal -->
+<div class="modal-overlay" id="record-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h5><i class="fas fa-plus-circle"></i> New Compliance Record</h5>
+      <button class="modal-close" onclick="closeModal('record-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Type *</label>
+        <select id="nr-type" class="form-select">
+          <option value="Course">Course</option>
+          <option value="Assessment">Assessment</option>
+          <option value="Program">Program</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Entity ID</label>
+        <input type="number" id="nr-entity" class="form-control" placeholder="Related Course/Assessment ID"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Result *</label>
+        <select id="nr-result" class="form-select">
+          <option value="COMPLIANT">Compliant</option>
+          <option value="NON_COMPLIANT">Non-Compliant</option>
+          <option value="UNDER_REVIEW">Under Review</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea id="nr-notes" class="form-control" rows="3" placeholder="Observations and details…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline-ec" onclick="closeModal('record-modal')">Cancel</button>
+      <button class="btn-primary-ec" id="save-r-btn" onclick="doSave()"><i class="fas fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+  buildLayout('Compliance Records', 'compliance');
+
+  let allRecords = [];
+
+  async function loadAll() {
+    try {
+      const summary = await ComplianceAPI.getSummary();
+      document.getElementById('r-compliant').textContent = summary.compliant    || 0;
+      document.getElementById('r-non').textContent       = summary.nonCompliant || 0;
+      document.getElementById('r-review').textContent    = summary.underReview  || 0;
+      document.getElementById('r-rate').textContent      = Math.round(summary.complianceRate||0) + '%';
+
+      allRecords = await ComplianceAPI.getRecords();
+      renderTable(allRecords);
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  function filterRecords() {
+    const result = document.getElementById('result-filter').value;
+    const type   = document.getElementById('type-filter').value;
+    renderTable(allRecords.filter(r =>
+      (!result || r.result === result) && (!type || r.type === type)
+    ));
+  }
+
+  function renderTable(list) {
+    const tbody = document.getElementById('records-tbody');
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><i class="fas fa-shield-alt"></i><p>No records found.</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map((r, i) => `<tr>
+      <td style="color:var(--text-muted)">${i+1}</td>
+      <td><span style="font-weight:600">${esc(r.type)}</span></td>
+      <td>${r.entityId || '—'}</td>
+      <td>${badge(r.result)}</td>
+      <td>${fmtDate(r.date)}</td>
+      <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted)"
+          title="${esc(r.notes||'')}">${esc(r.notes||'—')}</td>
+    </tr>`).join('');
+  }
+
+  async function doSave() {
+    const btn = document.getElementById('save-r-btn');
+    setLoading(btn, true, 'Save');
+    try {
+      await ComplianceAPI.createRecord({
+        type    : document.getElementById('nr-type').value,
+        entityId: parseInt(document.getElementById('nr-entity').value)||null,
+        result  : document.getElementById('nr-result').value,
+        notes   : document.getElementById('nr-notes').value.trim(),
+      });
+      showToast('Record created!', 'success');
+      closeModal('record-modal');
+      loadAll();
+    } catch(e) { showToast(e.message, 'error'); }
+    finally { setLoading(btn, false, '<i class="fas fa-save"></i> Save'); }
+  }
+
+  loadAll();
+</script>
+</body>
+</html>

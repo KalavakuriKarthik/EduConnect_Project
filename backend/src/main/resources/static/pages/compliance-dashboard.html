@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduConnect – Compliance Dashboard</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <span class="topbar-title"></span>
+      <div class="topbar-actions">
+        <button class="notif-btn" onclick="location.href='notifications.html'">
+          <i class="fas fa-bell"></i>
+          <span class="notif-badge" id="notif-count" style="display:none">0</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div><h2>Compliance Dashboard</h2><p>Monitor compliance records and audit activities</p></div>
+        <div style="display:flex;gap:10px">
+          <button class="btn-primary-ec" onclick="openModal('new-record-modal')"><i class="fas fa-plus"></i> New Record</button>
+          <button class="btn-accent-ec"  onclick="openModal('new-audit-modal')"><i class="fas fa-search"></i> New Audit</button>
+        </div>
+      </div>
+
+      <!-- Summary Stats -->
+      <div class="stats-grid">
+        <div class="stat-card" style="border-left-color:var(--success)">
+          <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+          <div class="stat-info"><div class="stat-value" id="c-compliant">—</div><div class="stat-label">Compliant</div></div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--danger)">
+          <div class="stat-icon red"><i class="fas fa-times-circle"></i></div>
+          <div class="stat-info"><div class="stat-value" id="c-non">—</div><div class="stat-label">Non-Compliant</div></div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--warning)">
+          <div class="stat-icon orange"><i class="fas fa-clock"></i></div>
+          <div class="stat-info"><div class="stat-value" id="c-review">—</div><div class="stat-label">Under Review</div></div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--accent)">
+          <div class="stat-icon teal"><i class="fas fa-percentage"></i></div>
+          <div class="stat-info"><div class="stat-value" id="c-rate">—</div><div class="stat-label">Compliance Rate</div></div>
+        </div>
+      </div>
+
+      <!-- Compliance Records -->
+      <div class="card">
+        <div class="card-header">
+          <h5><i class="fas fa-shield-alt"></i> Compliance Records</h5>
+          <button class="btn-outline-ec" onclick="location.href='compliance-records.html'">Full List</button>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="ec-table">
+              <thead><tr><th>Type</th><th>Entity ID</th><th>Result</th><th>Date</th><th>Notes</th></tr></thead>
+              <tbody id="records-tbody"><tr><td colspan="5"><div class="spinner"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audits -->
+      <div class="card">
+        <div class="card-header">
+          <h5><i class="fas fa-search"></i> Recent Audits</h5>
+          <button class="btn-outline-ec" onclick="location.href='audits.html'">Full List</button>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="ec-table">
+              <thead><tr><th>Scope</th><th>Officer</th><th>Findings</th><th>Date</th><th>Status</th></tr></thead>
+              <tbody id="audits-tbody"><tr><td colspan="5"><div class="spinner"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New Compliance Record Modal -->
+<div class="modal-overlay" id="new-record-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h5><i class="fas fa-shield-alt"></i> New Compliance Record</h5>
+      <button class="modal-close" onclick="closeModal('new-record-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Type</label>
+        <select id="nr-type" class="form-select">
+          <option value="Course">Course</option>
+          <option value="Assessment">Assessment</option>
+          <option value="Program">Program</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Entity ID</label>
+        <input type="number" id="nr-entity" class="form-control" placeholder="1"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Result</label>
+        <select id="nr-result" class="form-select">
+          <option value="COMPLIANT">Compliant</option>
+          <option value="NON_COMPLIANT">Non-Compliant</option>
+          <option value="UNDER_REVIEW">Under Review</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea id="nr-notes" class="form-control" rows="3" placeholder="Observations…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline-ec" onclick="closeModal('new-record-modal')">Cancel</button>
+      <button class="btn-primary-ec" id="save-record-btn" onclick="doSaveRecord()"><i class="fas fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Audit Modal -->
+<div class="modal-overlay" id="new-audit-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h5><i class="fas fa-search"></i> Create Audit</h5>
+      <button class="modal-close" onclick="closeModal('new-audit-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Scope</label>
+        <input type="text" id="na-scope" class="form-control" placeholder="Full institution / Course 12…"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Findings</label>
+        <textarea id="na-findings" class="form-control" rows="4" placeholder="Audit findings…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline-ec" onclick="closeModal('new-audit-modal')">Cancel</button>
+      <button class="btn-accent-ec" id="save-audit-btn" onclick="doSaveAudit()"><i class="fas fa-save"></i> Create Audit</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+  buildLayout('Compliance Dashboard', 'dashboard');
+
+  const user = Auth.getUser();
+
+  async function loadAll() {
+    try {
+      const summary = await ComplianceAPI.getSummary();
+      document.getElementById('c-compliant').textContent = summary.compliant   || 0;
+      document.getElementById('c-non').textContent       = summary.nonCompliant || 0;
+      document.getElementById('c-review').textContent    = summary.underReview  || 0;
+      document.getElementById('c-rate').textContent      = Math.round(summary.complianceRate || 0) + '%';
+
+      const records = await ComplianceAPI.getRecords();
+      const rtbody  = document.getElementById('records-tbody');
+      rtbody.innerHTML = records.length
+        ? records.slice(0,8).map(r => `<tr>
+            <td>${esc(r.type)}</td>
+            <td>${r.entityId || '—'}</td>
+            <td>${badge(r.result)}</td>
+            <td>${fmtDate(r.date)}</td>
+            <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted)">${esc(r.notes||'—')}</td>
+          </tr>`).join('')
+        : `<tr><td colspan="5"><div class="empty-state"><i class="fas fa-shield-alt"></i><p>No records.</p></div></td></tr>`;
+
+      const audits = await ComplianceAPI.getAudits();
+      const atbody = document.getElementById('audits-tbody');
+      atbody.innerHTML = audits.length
+        ? audits.slice(0,8).map(a => `<tr>
+            <td><strong>${esc(a.scope)}</strong></td>
+            <td>${esc(a.officer?.name || '—')}</td>
+            <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted)">${esc(a.findings||'—')}</td>
+            <td>${fmtDate(a.date)}</td>
+            <td>${badge(a.status)}</td>
+          </tr>`).join('')
+        : `<tr><td colspan="5"><div class="empty-state"><i class="fas fa-search"></i><p>No audits.</p></div></td></tr>`;
+    } catch(e) { showToast('Load error: ' + e.message, 'error'); }
+  }
+
+  async function doSaveRecord() {
+    const btn = document.getElementById('save-record-btn');
+    setLoading(btn, true, 'Save');
+    try {
+      await ComplianceAPI.createRecord({
+        type    : document.getElementById('nr-type').value,
+        entityId: parseInt(document.getElementById('nr-entity').value) || null,
+        result  : document.getElementById('nr-result').value,
+        notes   : document.getElementById('nr-notes').value.trim(),
+      });
+      showToast('Record created!', 'success');
+      closeModal('new-record-modal');
+      loadAll();
+    } catch(e) { showToast(e.message, 'error'); }
+    finally { setLoading(btn, false, '<i class="fas fa-save"></i> Save'); }
+  }
+
+  async function doSaveAudit() {
+    const btn = document.getElementById('save-audit-btn');
+    setLoading(btn, true, 'Create Audit');
+    try {
+      await ComplianceAPI.createAudit(user.userId, {
+        scope   : document.getElementById('na-scope').value.trim(),
+        findings: document.getElementById('na-findings').value.trim(),
+      });
+      showToast('Audit created!', 'success');
+      closeModal('new-audit-modal');
+      loadAll();
+    } catch(e) { showToast(e.message, 'error'); }
+    finally { setLoading(btn, false, '<i class="fas fa-save"></i> Create Audit'); }
+  }
+
+  loadAll();
+</script>
+</body>
+</html>

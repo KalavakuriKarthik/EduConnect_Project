@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EduConnect - Login</title>
+
+  <link rel="stylesheet" href="css/style.css"/>
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+
+<body class="auth-page">
+
+<div class="auth-card">
+
+  <div class="auth-logo">
+    <div class="logo-icon">
+      <i class="fas fa-graduation-cap"></i>
+    </div>
+    <h2>EduConnect</h2>
+    <p>Digital Education & E-Learning Governance</p>
+  </div>
+
+  <!-- Tabs -->
+  <div class="auth-tabs">
+    <div class="auth-tab active" id="tab-login" onclick="switchTab('login')">Login</div>
+    <div class="auth-tab" id="tab-register" onclick="switchTab('register')">Register</div>
+  </div>
+
+  <!-- LOGIN FORM -->
+  <form id="login-form" onsubmit="doLogin(event)">
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="l-email" required/>
+    </div>
+
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="l-password" required/>
+    </div>
+
+    <button type="submit" id="login-btn" class="btn-primary-ec">
+      <i class="fas fa-sign-in-alt"></i> Login
+    </button>
+
+    <div id="login-error" style="color:red; margin-top:10px;"></div>
+  </form>
+
+  <!-- REGISTER FORM -->
+  <form id="register-form" style="display:none;" onsubmit="doRegister(event)">
+
+    <div class="form-group">
+      <label>Full Name</label>
+      <input type="text" id="r-name" required/>
+    </div>
+
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="r-email" required/>
+    </div>
+
+    <div class="form-group">
+      <label>Phone</label>
+      <input type="text" id="r-phone"/>
+    </div>
+
+    <div class="form-group">
+      <label>Role</label>
+      <select id="r-role" required>
+        <option value="">Select role</option>
+        <option value="STUDENT">Student</option>
+        <option value="TEACHER">Teacher</option>
+        <option value="SCHOOL_ADMIN">School Admin</option>
+        <option value="PROGRAM_MANAGER">Program Manager</option>
+        <option value="COMPLIANCE_OFFICER">Compliance Officer</option>
+        <option value="GOVERNMENT_AUDITOR">Government Auditor</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="r-password" required/>
+    </div>
+
+    <button type="submit" id="reg-btn" class="btn-accent-ec">
+      <i class="fas fa-user-plus"></i> Create Account
+    </button>
+
+    <div id="reg-error" style="color:red; margin-top:10px;"></div>
+  </form>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script src="js/api.js"></script>
+
+<script>
+  // Redirect if already logged in
+  Auth.redirectIfLoggedIn();
+
+  function switchTab(tab) {
+      document.getElementById('login-form').style.display = tab === 'login' ? 'block' : 'none';
+      document.getElementById('register-form').style.display = tab === 'register' ? 'block' : 'none';
+
+      document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+      document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+  }
+
+  async function doLogin(e) {
+      e.preventDefault();
+      document.getElementById('login-error').textContent = '';
+
+      try {
+          const data = await AuthAPI.login({
+              email: document.getElementById('l-email').value,
+              password: document.getElementById('l-password').value
+          });
+
+          Auth.setSession(data);
+          window.location.href = roleDashboard(data.role);
+
+      } catch (err) {
+          document.getElementById('login-error').textContent = err.message;
+      }
+  }
+
+  async function doRegister(e) {
+      e.preventDefault();
+      document.getElementById('reg-error').textContent = '';
+
+      try {
+          const data = await AuthAPI.register({
+              name: document.getElementById('r-name').value,
+              email: document.getElementById('r-email').value,
+              password: document.getElementById('r-password').value,
+              phone: document.getElementById('r-phone').value,
+              role: document.getElementById('r-role').value
+          });
+
+          Auth.setSession(data);
+          window.location.href = roleDashboard(data.role);
+
+      } catch (err) {
+          document.getElementById('reg-error').textContent = err.message;
+      }
+  }
+</script>
+
+</body>
+</html>

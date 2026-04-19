@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduConnect – Assessments</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <span class="topbar-title"></span>
+      <div class="topbar-actions">
+        <button class="notif-btn" onclick="location.href='notifications.html'">
+          <i class="fas fa-bell"></i>
+          <span class="notif-badge" id="notif-count" style="display:none">0</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div><h2>Assessments</h2><p>View and submit your assessments</p></div>
+      </div>
+
+      <!-- Available Assessments -->
+      <div class="card">
+        <div class="card-header"><h5><i class="fas fa-tasks"></i> Available Assessments</h5></div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="ec-table">
+              <thead><tr><th>Title</th><th>Course</th><th>Type</th><th>Due Date</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody id="assessments-tbody"><tr><td colspan="6"><div class="spinner"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- My Submissions -->
+      <div class="card">
+        <div class="card-header"><h5><i class="fas fa-file-alt"></i> My Submissions</h5></div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="ec-table">
+              <thead><tr><th>Assessment</th><th>Submitted</th><th>Grade</th><th>Feedback</th><th>Status</th></tr></thead>
+              <tbody id="subs-tbody"><tr><td colspan="5"><div class="spinner"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Submit Modal -->
+<div class="modal-overlay" id="submit-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h5><i class="fas fa-upload"></i> Submit Assessment</h5>
+      <button class="modal-close" onclick="closeModal('submit-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="sub-assessment-id"/>
+      <div class="form-group">
+        <label class="form-label">Assessment</label>
+        <input type="text" id="sub-assessment-title" class="form-control" disabled/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">File URI / Link</label>
+        <input type="text" id="sub-file-uri" class="form-control" placeholder="https://drive.google.com/... or /uploads/file.pdf"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline-ec" onclick="closeModal('submit-modal')">Cancel</button>
+      <button class="btn-accent-ec"  id="submit-btn" onclick="doSubmit()"><i class="fas fa-upload"></i> Submit</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+  buildLayout('Assessments', 'assessments');
+
+  const user = Auth.getUser();
+  let studentId  = null;
+  let submittedSet = new Set();
+
+  async function init() {
+    try {
+      const st = await StudentAPI.getByUserId(user.userId);
+      studentId = st.studentId;
+      await loadSubmissions();
+      await loadAssessments();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  async function loadSubmissions() {
+    const tbody = document.getElementById('subs-tbody');
+    try {
+      const subs = await AssessmentAPI.submissionsByStudent(studentId);
+      submittedSet = new Set(subs.map(s => s.assessmentId));
+      if (!subs.length) {
+        tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><i class="fas fa-file-alt"></i><p>No submissions yet.</p></div></td></tr>`;
+        return;
+      }
+      tbody.innerHTML = subs.map(s => `
+        <tr>
+          <td><strong>${esc(s.assessmentTitle)}</strong></td>
+          <td>${fmtDate(s.date)}</td>
+          <td><strong style="color:var(--primary)">${s.grade != null ? s.grade : '—'}</strong></td>
+          <td style="color:var(--text-muted);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.feedback || '—')}</td>
+          <td>${badge(s.status)}</td>
+        </tr>`).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger)">Failed to load submissions.</td></tr>`;
+    }
+  }
+
+  async function loadAssessments() {
+    const tbody = document.getElementById('assessments-tbody');
+    try {
+      const all = await AssessmentAPI.getAll();
+      if (!all.length) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><i class="fas fa-tasks"></i><p>No assessments available.</p></div></td></tr>`;
+        return;
+      }
+      tbody.innerHTML = all.map(a => {
+        const submitted = submittedSet.has(a.assessmentId);
+        return `<tr>
+          <td><strong>${esc(a.title)}</strong></td>
+          <td>${esc(a.courseTitle)}</td>
+          <td>${esc(a.type || '—')}</td>
+          <td>${fmtDate(a.date)}</td>
+          <td>${badge(a.status)}</td>
+          <td>${submitted
+            ? `<span style="color:var(--success);font-size:.8rem"><i class="fas fa-check-circle"></i> Submitted</span>`
+            : `<button class="btn-accent-ec" style="padding:5px 12px;font-size:.8rem" onclick="openSubmitModal(${a.assessmentId},'${esc(a.title)}')"><i class="fas fa-upload"></i> Submit</button>`
+          }</td>
+        </tr>`;
+      }).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger)">Failed to load assessments.</td></tr>`;
+    }
+  }
+
+  function openSubmitModal(id, title) {
+    document.getElementById('sub-assessment-id').value = id;
+    document.getElementById('sub-assessment-title').value = title;
+    document.getElementById('sub-file-uri').value = '';
+    openModal('submit-modal');
+  }
+
+  async function doSubmit() {
+    const btn = document.getElementById('submit-btn');
+    setLoading(btn, true, 'Submit');
+    try {
+      await AssessmentAPI.submit({
+        assessmentId: parseInt(document.getElementById('sub-assessment-id').value),
+        studentId,
+        fileUri: document.getElementById('sub-file-uri').value.trim(),
+      });
+      showToast('Submitted successfully!', 'success');
+      closeModal('submit-modal');
+      await loadSubmissions();
+      await loadAssessments();
+    } catch(e) { showToast(e.message, 'error'); }
+    finally { setLoading(btn, false, '<i class="fas fa-upload"></i> Submit'); }
+  }
+
+  init();
+</script>
+</body>
+</html>

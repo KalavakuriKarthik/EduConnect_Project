@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduConnect – Manage Courses</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <span class="topbar-title"></span>
+      <div class="topbar-actions">
+        <button class="notif-btn" onclick="location.href='notifications.html'">
+          <i class="fas fa-bell"></i>
+          <span class="notif-badge" id="notif-count" style="display:none">0</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div><h2>Manage Courses</h2><p>Create, edit and oversee all courses</p></div>
+        <button class="btn-primary-ec" onclick="openCourseModal()"><i class="fas fa-plus"></i> New Course</button>
+      </div>
+
+      <!-- Search -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-body" style="display:flex;gap:12px">
+          <input type="text" id="search-input" class="form-control" placeholder="Search by title…" oninput="filterCourses()" style="flex:1"/>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h5><i class="fas fa-book-open"></i> All Courses</h5></div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="ec-table">
+              <thead><tr><th>Title</th><th>Teacher</th><th>Start</th><th>End</th><th>Enrolled</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="courses-tbody"><tr><td colspan="7"><div class="spinner"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Course Modal (Create / Edit) -->
+<div class="modal-overlay" id="course-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h5 id="course-modal-title"><i class="fas fa-book-open"></i> Course</h5>
+      <button class="modal-close" onclick="closeModal('course-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-course-id"/>
+      <div class="form-group">
+        <label class="form-label">Title *</label>
+        <input type="text" id="c-title" class="form-control" placeholder="Course title…"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea id="c-desc" class="form-control" rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Teacher ID</label>
+        <input type="number" id="c-teacher" class="form-control" placeholder="User ID of teacher"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Start Date</label>
+          <input type="date" id="c-start" class="form-control"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">End Date</label>
+          <input type="date" id="c-end" class="form-control"/>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline-ec" onclick="closeModal('course-modal')">Cancel</button>
+      <button class="btn-primary-ec" id="save-course-btn" onclick="doSaveCourse()"><i class="fas fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+  buildLayout('Manage Courses', 'courses');
+
+  let allCourses = [];
+
+  async function loadCourses() {
+    const tbody = document.getElementById('courses-tbody');
+    try {
+      allCourses = await CourseAPI.getAll();
+      renderTable(allCourses);
+    } catch(e) { tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger)">Failed: ${e.message}</td></tr>`; }
+  }
+
+  function filterCourses() {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    renderTable(allCourses.filter(c => c.title.toLowerCase().includes(q)));
+  }
+
+  function renderTable(list) {
+    const tbody = document.getElementById('courses-tbody');
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="fas fa-book-open"></i><p>No courses found.</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map(c => `<tr>
+      <td><strong>${esc(c.title)}</strong></td>
+      <td>${esc(c.teacherName||'—')}</td>
+      <td>${fmtDate(c.startDate)}</td>
+      <td>${fmtDate(c.endDate)}</td>
+      <td>${c.enrollmentCount}</td>
+      <td>${badge(c.status)}</td>
+      <td style="display:flex;gap:6px">
+        <button class="btn-outline-ec" style="padding:4px 10px;font-size:.78rem" onclick='openCourseModal(${JSON.stringify(c)})'>
+          <i class="fas fa-edit"></i> Edit
+        </button>
+        <button class="btn-danger-ec" style="padding:4px 10px;font-size:.78rem" onclick="doDelete(${c.courseId})">
+          <i class="fas fa-trash"></i>
+        </button>
+      </td>
+    </tr>`).join('');
+  }
+
+  function openCourseModal(course = null) {
+    document.getElementById('edit-course-id').value = course ? course.courseId : '';
+    document.getElementById('c-title').value   = course ? course.title        : '';
+    document.getElementById('c-desc').value    = course ? course.description  : '';
+    document.getElementById('c-teacher').value = course ? (course.teacherId||'') : '';
+    document.getElementById('c-start').value   = course ? (course.startDate||'') : '';
+    document.getElementById('c-end').value     = course ? (course.endDate||'')   : '';
+    document.getElementById('course-modal-title').innerHTML = course
+      ? '<i class="fas fa-edit"></i> Edit Course'
+      : '<i class="fas fa-plus-circle"></i> New Course';
+    openModal('course-modal');
+  }
+
+  async function doSaveCourse() {
+    const btn = document.getElementById('save-course-btn');
+    const id  = document.getElementById('edit-course-id').value;
+    const body = {
+      title      : document.getElementById('c-title').value.trim(),
+      description: document.getElementById('c-desc').value.trim(),
+      teacherId  : parseInt(document.getElementById('c-teacher').value)||null,
+      startDate  : document.getElementById('c-start').value||null,
+      endDate    : document.getElementById('c-end').value||null,
+    };
+    if (!body.title) return showToast('Title is required','error');
+    setLoading(btn, true, 'Save');
+    try {
+      id ? await CourseAPI.update(id, body) : await CourseAPI.create(body);
+      showToast(id ? 'Course updated!' : 'Course created!', 'success');
+      closeModal('course-modal');
+      loadCourses();
+    } catch(e) { showToast(e.message,'error'); }
+    finally { setLoading(btn, false, '<i class="fas fa-save"></i> Save'); }
+  }
+
+  async function doDelete(id) {
+    if (!confirm('Delete this course?')) return;
+    try {
+      await CourseAPI.delete(id);
+      showToast('Course deleted', 'info');
+      loadCourses();
+    } catch(e) { showToast(e.message,'error'); }
+  }
+
+  loadCourses();
+</script>
+</body>
+</html>

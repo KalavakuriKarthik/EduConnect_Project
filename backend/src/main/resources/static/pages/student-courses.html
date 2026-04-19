@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduConnect – My Courses</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <span class="topbar-title"></span>
+      <div class="topbar-actions">
+        <button class="notif-btn" onclick="location.href='notifications.html'">
+          <i class="fas fa-bell"></i>
+          <span class="notif-badge" id="notif-count" style="display:none">0</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div><h2>Courses</h2><p>Browse all available courses and manage your enrollments</p></div>
+      </div>
+
+      <!-- Search -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-body" style="display:flex;gap:12px;align-items:flex-end">
+          <div class="form-group" style="flex:1;margin:0">
+            <input type="text" id="search-input" class="form-control" placeholder="Search courses by title…" oninput="filterCourses()"/>
+          </div>
+          <button class="btn-outline-ec" onclick="loadEnrolled()" style="white-space:nowrap"><i class="fas fa-list"></i> My Enrolled</button>
+          <button class="btn-accent-ec"  onclick="loadAll()"      style="white-space:nowrap"><i class="fas fa-th"></i> All Courses</button>
+        </div>
+      </div>
+
+      <!-- Course Cards Grid -->
+      <div id="courses-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast-container"></div>
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+  buildLayout('Courses', 'courses');
+
+  const user = Auth.getUser();
+  let allCourses = [];
+  let studentId  = null;
+  let enrolled   = new Set();
+
+  async function init() {
+    try {
+      const st = await StudentAPI.getByUserId(user.userId);
+      studentId = st.studentId;
+      const enList = await EnrollmentAPI.byStudent(studentId);
+      enrolled = new Set(enList.map(e => e.courseId));
+      await loadAll();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  async function loadAll() {
+    document.getElementById('courses-grid').innerHTML = '<div class="spinner"></div>';
+    try {
+      allCourses = await CourseAPI.getAll();
+      renderCourses(allCourses);
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  async function loadEnrolled() {
+    document.getElementById('courses-grid').innerHTML = '<div class="spinner"></div>';
+    try {
+      const enList = await EnrollmentAPI.byStudent(studentId);
+      const eCourses = allCourses.filter(c => enrolled.has(c.courseId));
+      renderCourses(eCourses.length ? eCourses : []);
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  function filterCourses() {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    renderCourses(allCourses.filter(c => c.title.toLowerCase().includes(q)));
+  }
+
+  function renderCourses(list) {
+    const grid = document.getElementById('courses-grid');
+    if (!list.length) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-book-open"></i><p>No courses found.</p></div>`;
+      return;
+    }
+    grid.innerHTML = list.map(c => {
+      const isEnrolled = enrolled.has(c.courseId);
+      return `
+        <div class="card" style="margin:0">
+          <div class="card-body">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+              <div style="width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.2rem">
+                <i class="fas fa-book"></i>
+              </div>
+              ${badge(c.status)}
+            </div>
+            <h5 style="margin-bottom:6px;font-size:1rem">${esc(c.title)}</h5>
+            <p style="color:var(--text-muted);font-size:.83rem;margin-bottom:12px;min-height:36px">${esc(c.description || 'No description available.')}</p>
+            <div style="display:flex;gap:12px;font-size:.78rem;color:var(--text-muted);margin-bottom:14px">
+              <span><i class="fas fa-user-tie"></i> ${esc(c.teacherName || 'N/A')}</span>
+              <span><i class="fas fa-users"></i> ${c.enrollmentCount} enrolled</span>
+            </div>
+            <div style="display:flex;gap:8px">
+              ${isEnrolled
+                ? `<button class="btn-danger-ec" onclick="doUnenroll(${c.courseId}, this)"><i class="fas fa-minus-circle"></i> Unenroll</button>`
+                : `<button class="btn-accent-ec" onclick="doEnroll(${c.courseId}, this)"><i class="fas fa-plus-circle"></i> Enroll</button>`}
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  async function doEnroll(courseId, btn) {
+    if (!studentId) return showToast('Student profile not found', 'error');
+    setLoading(btn, true, 'Enroll');
+    try {
+      await EnrollmentAPI.enroll(studentId, courseId);
+      enrolled.add(courseId);
+      showToast('Enrolled successfully!', 'success');
+      renderCourses(allCourses);
+    } catch(e) { showToast(e.message, 'error'); }
+    finally { setLoading(btn, false, 'Enroll'); }
+  }
+
+  async function doUnenroll(courseId, btn) {
+    if (!confirm('Unenroll from this course?')) return;
+    setLoading(btn, true, 'Unenroll');
+    try {
+      await EnrollmentAPI.unenroll(studentId, courseId);
+      enrolled.delete(courseId);
+      showToast('Unenrolled.', 'info');
+      renderCourses(allCourses);
+    } catch(e) { showToast(e.message, 'error'); }
+    finally { setLoading(btn, false, 'Unenroll'); }
+  }
+
+  init();
+</script>
+</body>
+</html>

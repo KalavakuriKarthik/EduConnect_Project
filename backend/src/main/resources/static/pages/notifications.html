@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduConnect – Notifications</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <span class="topbar-title"></span>
+      <div class="topbar-actions">
+        <button class="notif-btn"><i class="fas fa-bell"></i>
+          <span class="notif-badge" id="notif-count" style="display:none">0</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div><h2>Notifications</h2><p>Your alerts and updates</p></div>
+        <button class="btn-outline-ec" onclick="markAll()"><i class="fas fa-check-double"></i> Mark All Read</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h5><i class="fas fa-bell"></i> All Notifications</h5>
+          <div style="display:flex;gap:8px">
+            <button class="btn-outline-ec" style="padding:5px 12px;font-size:.8rem" onclick="loadUnread()">Unread Only</button>
+            <button class="btn-outline-ec" style="padding:5px 12px;font-size:.8rem" onclick="loadAll()">All</button>
+          </div>
+        </div>
+        <div id="notif-list" style="padding:8px 0">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+  buildLayout('Notifications', 'notifications');
+
+  const user   = Auth.getUser();
+  const catIcon = { COURSE:'fa-book-open', ASSESSMENT:'fa-tasks', PROGRAM:'fa-sitemap', COMPLIANCE:'fa-shield-alt', GENERAL:'fa-info-circle' };
+
+  async function loadAll() {
+    const list = document.getElementById('notif-list');
+    list.innerHTML = '<div class="spinner"></div>';
+    try {
+      const notifs = await NotifAPI.byUser(user.userId);
+      renderNotifs(notifs);
+    } catch(e) { showToast(e.message,'error'); }
+  }
+
+  async function loadUnread() {
+    const list = document.getElementById('notif-list');
+    list.innerHTML = '<div class="spinner"></div>';
+    try {
+      const notifs = await NotifAPI.unread(user.userId);
+      renderNotifs(notifs);
+    } catch(e) { showToast(e.message,'error'); }
+  }
+
+  function renderNotifs(notifs) {
+    const list = document.getElementById('notif-list');
+    if (!notifs.length) {
+      list.innerHTML = `<div class="empty-state"><i class="fas fa-bell-slash"></i><p>No notifications.</p></div>`;
+      return;
+    }
+    list.innerHTML = notifs.map(n => {
+      const icon = catIcon[n.category] || 'fa-info-circle';
+      const unread = n.status === 'ACTIVE';
+      return `
+        <div style="display:flex;align-items:flex-start;gap:14px;padding:14px 20px;border-bottom:1px solid var(--border);${unread?'background:#f0f9ff;':''}" id="notif-${n.notificationId}">
+          <div style="width:40px;height:40px;border-radius:50%;background:${unread?'rgba(0,180,166,.12)':'rgba(108,122,141,.08)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="fas ${icon}" style="color:${unread?'var(--accent)':'var(--text-muted)'}"></i>
+          </div>
+          <div style="flex:1">
+            <div style="font-weight:${unread?'700':'500'};color:var(--text)">${esc(n.message)}</div>
+            <div style="font-size:.78rem;color:var(--text-muted);margin-top:3px">${fmtDate(n.createdDate)} · ${n.category || 'GENERAL'}</div>
+          </div>
+          ${unread ? `<button class="btn-outline-ec" style="font-size:.75rem;padding:4px 10px;white-space:nowrap" onclick="markOne(${n.notificationId})">Mark Read</button>` : ''}
+        </div>`;
+    }).join('');
+  }
+
+  async function markOne(id) {
+    try {
+      await NotifAPI.markRead(id);
+      const el = document.getElementById(`notif-${id}`);
+      if (el) el.style.background = '';
+      loadNotifCount();
+      showToast('Marked as read', 'info');
+    } catch(e) { showToast(e.message,'error'); }
+  }
+
+  async function markAll() {
+    try {
+      await NotifAPI.markAllRead(user.userId);
+      showToast('All marked as read', 'success');
+      loadAll();
+      loadNotifCount();
+    } catch(e) { showToast(e.message,'error'); }
+  }
+
+  loadAll();
+</script>
+</body>
+</html>

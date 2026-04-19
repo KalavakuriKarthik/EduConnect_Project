@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduConnect – Assessments</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <span class="topbar-title"></span>
+      <div class="topbar-actions">
+        <button class="notif-btn" onclick="location.href='notifications.html'">
+          <i class="fas fa-bell"></i><span class="notif-badge" id="notif-count" style="display:none">0</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div><h2>Assessments</h2><p>Create and manage assessments for your courses</p></div>
+        <button class="btn-primary-ec" onclick="openModal('create-modal')"><i class="fas fa-plus"></i> New Assessment</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h5><i class="fas fa-tasks"></i> All Assessments</h5></div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="ec-table">
+              <thead><tr><th>Title</th><th>Course</th><th>Type</th><th>Due Date</th><th>Submissions</th><th>Status</th></tr></thead>
+              <tbody id="assess-tbody"><tr><td colspan="6"><div class="spinner"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create Assessment Modal -->
+<div class="modal-overlay" id="create-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h5><i class="fas fa-plus-circle"></i> New Assessment</h5>
+      <button class="modal-close" onclick="closeModal('create-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Title *</label>
+        <input type="text" id="a-title" class="form-control" placeholder="Midterm Exam…"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Course ID *</label>
+        <input type="number" id="a-course" class="form-control" placeholder="e.g. 1"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select id="a-type" class="form-select">
+            <option value="ASSIGNMENT">Assignment</option>
+            <option value="EXAM">Exam</option>
+            <option value="QUIZ">Quiz</option>
+            <option value="PROJECT">Project</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Due Date</label>
+          <input type="date" id="a-date" class="form-control"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea id="a-desc" class="form-control" rows="3" placeholder="Assessment instructions…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline-ec" onclick="closeModal('create-modal')">Cancel</button>
+      <button class="btn-primary-ec" id="create-a-btn" onclick="doCreate()"><i class="fas fa-save"></i> Create</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+  buildLayout('Assessments', 'assessments');
+
+  const user = Auth.getUser();
+
+  async function loadAssessments() {
+    const tbody = document.getElementById('assess-tbody');
+    try {
+      // Get teacher's courses then all their assessments
+      const courses = await CourseAPI.getByTeacher(user.userId);
+      if (!courses.length) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><i class="fas fa-tasks"></i><p>No courses yet. Create a course first.</p></div></td></tr>`;
+        return;
+      }
+      let rows = [];
+      for (const c of courses) {
+        const assessments = await AssessmentAPI.byCourse(c.courseId);
+        rows.push(...assessments);
+      }
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><i class="fas fa-tasks"></i><p>No assessments yet.</p></div></td></tr>`;
+        return;
+      }
+      tbody.innerHTML = rows.map(a => `<tr>
+        <td><strong>${esc(a.title)}</strong></td>
+        <td>${esc(a.courseTitle)}</td>
+        <td>${esc(a.type||'—')}</td>
+        <td>${fmtDate(a.date)}</td>
+        <td>
+          <button class="btn-outline-ec" style="padding:3px 10px;font-size:.75rem" onclick="location.href='teacher-submissions.html?assessmentId=${a.assessmentId}'">
+            ${a.submissionCount} <i class="fas fa-external-link-alt"></i>
+          </button>
+        </td>
+        <td>${badge(a.status)}</td>
+      </tr>`).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger)">Error: ${e.message}</td></tr>`;
+    }
+  }
+
+  async function doCreate() {
+    const btn = document.getElementById('create-a-btn');
+    const title = document.getElementById('a-title').value.trim();
+    const courseId = parseInt(document.getElementById('a-course').value);
+    if (!title || !courseId) return showToast('Title and Course ID are required', 'error');
+    setLoading(btn, true, 'Create');
+    try {
+      await AssessmentAPI.create({
+        title, courseId,
+        type: document.getElementById('a-type').value,
+        date: document.getElementById('a-date').value || null,
+        description: document.getElementById('a-desc').value.trim(),
+      });
+      showToast('Assessment created!', 'success');
+      closeModal('create-modal');
+      loadAssessments();
+    } catch(e) { showToast(e.message, 'error'); }
+    finally { setLoading(btn, false, '<i class="fas fa-save"></i> Create'); }
+  }
+
+  loadAssessments();
+</script>
+</body>
+</html>

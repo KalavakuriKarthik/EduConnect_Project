@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduConnect – Submissions</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <span class="topbar-title"></span>
+      <div class="topbar-actions">
+        <button class="notif-btn" onclick="location.href='notifications.html'">
+          <i class="fas fa-bell"></i><span class="notif-badge" id="notif-count" style="display:none">0</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div><h2>Submissions</h2><p>Review and grade student submissions</p></div>
+      </div>
+
+      <!-- Filter by Assessment ID -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-body" style="display:flex;gap:12px;align-items:flex-end">
+          <div class="form-group" style="flex:1;margin:0">
+            <label class="form-label">Filter by Assessment ID</label>
+            <input type="number" id="filter-assessment-id" class="form-control" placeholder="Leave empty for all"/>
+          </div>
+          <button class="btn-accent-ec" onclick="loadSubmissions()"><i class="fas fa-filter"></i> Filter</button>
+          <button class="btn-outline-ec" onclick="document.getElementById('filter-assessment-id').value='';loadSubmissions()">Clear</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h5><i class="fas fa-file-alt"></i> Submissions</h5></div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="ec-table">
+              <thead><tr><th>Student</th><th>Assessment</th><th>File/Link</th><th>Submitted</th><th>Grade</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody id="subs-tbody"><tr><td colspan="7"><div class="spinner"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Grade Modal -->
+<div class="modal-overlay" id="grade-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h5><i class="fas fa-star"></i> Grade Submission</h5>
+      <button class="modal-close" onclick="closeModal('grade-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="g-sub-id"/>
+      <div class="form-group">
+        <label class="form-label">Student</label>
+        <input type="text" id="g-student" class="form-control" disabled/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Grade (0–100)</label>
+        <input type="number" id="g-grade" class="form-control" min="0" max="100"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Feedback</label>
+        <textarea id="g-feedback" class="form-control" rows="3"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline-ec" onclick="closeModal('grade-modal')">Cancel</button>
+      <button class="btn-primary-ec" id="g-btn" onclick="doGrade()"><i class="fas fa-save"></i> Save Grade</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+  buildLayout('Submissions', 'submissions');
+
+  const user = Auth.getUser();
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('assessmentId')) {
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('filter-assessment-id').value = params.get('assessmentId');
+    });
+  }
+
+  async function loadSubmissions() {
+    const tbody = document.getElementById('subs-tbody');
+    tbody.innerHTML = '<tr><td colspan="7"><div class="spinner"></div></td></tr>';
+    const aid = document.getElementById('filter-assessment-id').value;
+    try {
+      let subs = [];
+      if (aid) {
+        subs = await AssessmentAPI.submissionsByAssessment(aid);
+      } else {
+        const courses = await CourseAPI.getByTeacher(user.userId);
+        for (const c of courses) {
+          const assessments = await AssessmentAPI.byCourse(c.courseId);
+          for (const a of assessments) {
+            const s = await AssessmentAPI.submissionsByAssessment(a.assessmentId);
+            subs.push(...s);
+          }
+        }
+      }
+      if (!subs.length) {
+        tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="fas fa-file-alt"></i><p>No submissions found.</p></div></td></tr>`;
+        return;
+      }
+      tbody.innerHTML = subs.map(s => `<tr>
+        <td><strong>${esc(s.studentName)}</strong></td>
+        <td>${esc(s.assessmentTitle)}</td>
+        <td>${s.fileUri ? `<a href="${esc(s.fileUri)}" target="_blank" style="font-size:.8rem"><i class="fas fa-link"></i> View</a>` : '—'}</td>
+        <td>${fmtDate(s.date)}</td>
+        <td><strong style="color:var(--primary)">${s.grade != null ? s.grade : '—'}</strong></td>
+        <td>${badge(s.status)}</td>
+        <td>
+          ${s.status === 'PENDING' ? `
+            <button class="btn-accent-ec" style="padding:4px 12px;font-size:.78rem" onclick="openGradeModal(${s.submissionId},'${esc(s.studentName)}',${s.grade||''})">
+              <i class="fas fa-star"></i> Grade
+            </button>` : `
+            <button class="btn-outline-ec" style="padding:4px 12px;font-size:.78rem" onclick="openGradeModal(${s.submissionId},'${esc(s.studentName)}',${s.grade||''})">
+              <i class="fas fa-edit"></i> Re-grade
+            </button>`}
+        </td>
+      </tr>`).join('');
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger)">Error: ${e.message}</td></tr>`;
+    }
+  }
+
+  function openGradeModal(subId, studentName, existingGrade) {
+    document.getElementById('g-sub-id').value   = subId;
+    document.getElementById('g-student').value  = studentName;
+    document.getElementById('g-grade').value    = existingGrade || '';
+    document.getElementById('g-feedback').value = '';
+    openModal('grade-modal');
+  }
+
+  async function doGrade() {
+    const btn = document.getElementById('g-btn');
+    const grade = parseFloat(document.getElementById('g-grade').value);
+    if (isNaN(grade)) return showToast('Enter a valid grade','error');
+    setLoading(btn, true, 'Save Grade');
+    try {
+      await AssessmentAPI.grade(document.getElementById('g-sub-id').value, {
+        grade,
+        feedback: document.getElementById('g-feedback').value.trim()
+      });
+      showToast('Grade saved!', 'success');
+      closeModal('grade-modal');
+      loadSubmissions();
+    } catch(e) { showToast(e.message,'error'); }
+    finally { setLoading(btn, false, '<i class="fas fa-save"></i> Save Grade'); }
+  }
+
+  loadSubmissions();
+</script>
+</body>
+</html>

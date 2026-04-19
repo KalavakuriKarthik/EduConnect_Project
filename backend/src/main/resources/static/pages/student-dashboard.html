@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduConnect – Student Dashboard</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main-content">
+    <header class="topbar">
+      <span class="topbar-title"></span>
+      <div class="topbar-actions">
+        <button class="notif-btn" onclick="location.href='notifications.html'">
+          <i class="fas fa-bell"></i>
+          <span class="notif-badge" id="notif-count" style="display:none">0</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div>
+          <h2 id="welcome-msg">Welcome back!</h2>
+          <p>Here's your learning overview</p>
+        </div>
+      </div>
+
+      <!-- Stat cards -->
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card" style="border-left-color:var(--primary-light)">
+          <div class="stat-icon blue"><i class="fas fa-book-open"></i></div>
+          <div class="stat-info"><div class="stat-value" id="s-enrolled">—</div><div class="stat-label">Enrolled Courses</div></div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--accent)">
+          <div class="stat-icon teal"><i class="fas fa-tasks"></i></div>
+          <div class="stat-info"><div class="stat-value" id="s-submissions">—</div><div class="stat-label">Submissions</div></div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--warning)">
+          <div class="stat-icon orange"><i class="fas fa-chart-line"></i></div>
+          <div class="stat-info"><div class="stat-value" id="s-avg-progress">—</div><div class="stat-label">Avg. Progress</div></div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--success)">
+          <div class="stat-icon green"><i class="fas fa-star"></i></div>
+          <div class="stat-info"><div class="stat-value" id="s-avg-grade">—</div><div class="stat-label">Avg. Grade</div></div>
+        </div>
+      </div>
+
+      <!-- My Courses + Progress side-by-side -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+        <!-- My Courses -->
+        <div class="card">
+          <div class="card-header">
+            <h5><i class="fas fa-book-open"></i> My Enrolled Courses</h5>
+            <button class="btn-accent-ec" onclick="location.href='student-courses.html'">View All</button>
+          </div>
+          <div class="card-body" id="enrolled-courses-body">
+            <div class="spinner"></div>
+          </div>
+        </div>
+
+        <!-- Progress -->
+        <div class="card">
+          <div class="card-header">
+            <h5><i class="fas fa-chart-line"></i> Course Progress</h5>
+          </div>
+          <div class="card-body" id="progress-body">
+            <div class="spinner"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Submissions -->
+      <div class="card" style="margin-top:20px">
+        <div class="card-header">
+          <h5><i class="fas fa-file-alt"></i> Recent Submissions</h5>
+          <button class="btn-outline-ec" onclick="location.href='student-assessments.html'">All Assessments</button>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="ec-table">
+              <thead><tr><th>Assessment</th><th>Course</th><th>Submitted</th><th>Grade</th><th>Status</th></tr></thead>
+              <tbody id="submissions-tbody"><tr><td colspan="5"><div class="spinner"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="../js/api.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+  buildLayout('Student Dashboard', 'dashboard');
+
+  const user = Auth.getUser();
+  document.getElementById('welcome-msg').textContent = `Welcome back, ${user.name}!`;
+
+  async function loadDashboard() {
+    try {
+      // Get student profile
+      const student = await StudentAPI.getByUserId(user.userId);
+      const sid = student.studentId;
+
+      // Enrollments
+      const enrollments = await EnrollmentAPI.byStudent(sid);
+      document.getElementById('s-enrolled').textContent = enrollments.length;
+
+      // Render course list
+      const cBody = document.getElementById('enrolled-courses-body');
+      if (enrollments.length === 0) {
+        cBody.innerHTML = `<div class="empty-state"><i class="fas fa-book-open"></i><p>No courses enrolled yet.</p></div>`;
+      } else {
+        cBody.innerHTML = enrollments.slice(0,5).map(e => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+            <div>
+              <div style="font-weight:600">${esc(e.courseTitle)}</div>
+              <div style="font-size:.8rem;color:var(--text-muted)">${fmtDate(e.date)}</div>
+            </div>
+            ${badge(e.status)}
+          </div>`).join('');
+      }
+
+      // Progress
+      const progList = await ProgressAPI.byStudent(sid);
+      const pBody = document.getElementById('progress-body');
+      if (progList.length === 0) {
+        pBody.innerHTML = `<div class="empty-state"><i class="fas fa-chart-line"></i><p>No progress data yet.</p></div>`;
+      } else {
+        const avgPct = progList.reduce((a,p) => a + (p.completionPercentage||0), 0) / progList.length;
+        document.getElementById('s-avg-progress').textContent = Math.round(avgPct) + '%';
+        pBody.innerHTML = progList.map(p => `
+          <div style="margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+              <span style="font-weight:600;font-size:.875rem">${esc(p.courseTitle)}</span>
+              <span style="font-size:.8rem;color:var(--text-muted)">${Math.round(p.completionPercentage||0)}%</span>
+            </div>
+            ${progressBar(p.completionPercentage)}
+          </div>`).join('');
+      }
+
+      // Submissions
+      const subs = await AssessmentAPI.submissionsByStudent(sid);
+      document.getElementById('s-submissions').textContent = subs.length;
+      const graded = subs.filter(s => s.grade != null);
+      const avgGrade = graded.length ? (graded.reduce((a,s)=>a+s.grade,0)/graded.length).toFixed(1) : '—';
+      document.getElementById('s-avg-grade').textContent = avgGrade;
+
+      const tbody = document.getElementById('submissions-tbody');
+      if (subs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><i class="fas fa-file-alt"></i><p>No submissions yet.</p></div></td></tr>`;
+      } else {
+        tbody.innerHTML = subs.slice(0,8).map(s => `
+          <tr>
+            <td>${esc(s.assessmentTitle)}</td>
+            <td style="color:var(--text-muted)">${esc(s.assessmentTitle)}</td>
+            <td>${fmtDate(s.date)}</td>
+            <td><strong>${s.grade != null ? s.grade : '—'}</strong></td>
+            <td>${badge(s.status)}</td>
+          </tr>`).join('');
+      }
+    } catch(err) {
+      showToast('Failed to load dashboard: ' + err.message, 'error');
+    }
+  }
+
+  loadDashboard();
+</script>
+</body>
+</html>
